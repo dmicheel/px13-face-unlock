@@ -1,0 +1,24 @@
+Creative Commons Legal Code
+
+CC0 1.0 Universal
+
+The person who associated a work with this deed has dedicated the work to
+the public domain by waiving all of his or her rights to the work
+worldwide under copyright law, including all related and neighboring
+rights, to the extent allowed by law.
+
+You can copy, modify, distribute and perform the work, even for
+commercial purposes, all without asking permission.
+
+Note: CC0 applies only to the guide (README.md) and the scripts
+(install.sh, npu/install-sdk.sh, npu/use-npu.sh, npu/use-cpu.sh).
+
+Other parts keep their own licenses:
+
+- gaze-overlay/ (source, Cargo files, systemd user unit): MIT, full text
+  in gaze-overlay/LICENSE.
+
+Not included: Gaze (GPL-3.0-or-later) and AMD's Ryzen AI SDK (AMD EULA)
+are installed from their own sources, not redistributed here.
+
+Full CC0 text: https://creativecommons.org/publicdomain/zero/1.0/legalcode

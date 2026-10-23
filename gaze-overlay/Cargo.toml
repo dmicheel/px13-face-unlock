@@ -1,0 +1,15 @@
+[package]
+name = "gaze-overlay"
+version = "0.1.0"
+edition = "2024"
+description = "Face ID-style overlay for Gaze face authentication"
+license = "MIT"
+
+[dependencies]
+async-channel = "2"
+gtk = { package = "gtk4", version = "0.11", features = ["v4_12"] }
+gtk4-layer-shell = "0.8"
+
+[profile.release]
+lto = true
+strip = true

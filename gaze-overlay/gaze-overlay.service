@@ -1,0 +1,12 @@
+[Unit]
+Description=Face ID-style overlay for Gaze face authentication
+PartOf=graphical-session.target
+After=graphical-session.target
+Requisite=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/gaze-overlay
+Restart=on-failure
+
+[Install]
+WantedBy=graphical-session.target
