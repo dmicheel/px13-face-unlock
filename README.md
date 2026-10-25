@@ -94,7 +94,8 @@ journalctl -u gazed -f | grep -m1 'Models & user DB loaded'   # first start: ~8 
 The first start compiles all models for the NPU: about 8 minutes without
 face auth (passwords work). The result is cached in
 `/var/cache/gaze/inference/vitis/`; later starts take ~3 s, also after kernel
-updates (see below).
+updates. Only a change to Gaze, the SDK, XRT or the NPU firmware recompiles
+(see below).
 
 `npu/install-sdk.sh` passes `-a yes` to AMD's installer, which accepts AMD's
 EULAs. It:
@@ -126,8 +127,13 @@ EULAs. It:
     hashes the kernel version into the cache key, so every kernel update
     would recompile. gazed sees the kernel version from the first run instead
     (`uname -r` is unaffected); the compiled NPU binaries don't depend on the
-    kernel, so only SDK updates recompile,
-- deletes leftover cache directories of older kernels/SDKs,
+    kernel,
+  - `ExecStartPre=-+/usr/local/libexec/gaze-npu-cache-check`
+    (`npu/cache-check.sh`): records what Gaze's cache key misses (the `gazed`
+    binary, the SDK's compiler, XRT, the running NPU firmware) in
+    `…/vitis/compiled-with`. When any of it changes, e.g. on a `gaze-bin`
+    update, it logs the change, drops the cache and re-pins the kernel
+    version, so gazed recompiles. It also deletes caches of older kernels/SDKs,
 - sets `execution_provider = "vitis"`, `device = "npu"` and restarts gazed.
 
 Switching:
@@ -135,7 +141,7 @@ Switching:
 ```sh
 sh npu/use-cpu.sh                # back to the CPU; registration stays
 sh npu/use-npu.sh                # back to the NPU, no recompile
-sh npu/use-npu.sh --recompile    # drop the cache, re-pin to the running kernel
+sh npu/use-npu.sh --recompile    # force a recompile, re-pin to the running kernel
 sh npu/use-cpu.sh --unregister   # also remove the registration and the drop-in
 ```
 
@@ -186,8 +192,9 @@ sudo systemctl daemon-reload && sudo systemctl restart gazed
   — the compiler ran with a read-only working directory; `WorkingDirectory`
   is missing from the drop-in.
 - **`mmap(...) failed (err=-11)`** — memlock limit too low.
-- **NPU fails after a kernel update** (`Accelerator setup failed`, crash) —
-  stale compiled models: `sh npu/use-npu.sh --recompile`.
+- **No face detected on the NPU, or `Accelerator setup failed`/crash after an
+  update** — stale compiled models: `sh npu/use-npu.sh --recompile`. The
+  cache check logs its decisions: `journalctl -u gazed | grep 'NPU model cache'`.
 - **Face auth stops matching on the NPU** — check scores with debug logging;
   fall back with `sh npu/use-cpu.sh`.
 
@@ -221,6 +228,7 @@ install.sh               Gaze, config, PAM, lock screen/greeter, overlay (uninst
 npu/install-sdk.sh       XRT, Ryzen AI SDK in /opt/ryzen-ai, Arch fixes, then use-npu.sh
 npu/use-npu.sh           register the SDK with Gaze, gazed drop-in, switch to the NPU
 npu/use-cpu.sh           switch back to the CPU (--unregister removes the NPU setup)
+npu/cache-check.sh       gazed ExecStartPre: recompile when Gaze/SDK/XRT/NPU firmware change
 gaze-overlay/            Face ID-style overlay (Rust, GTK4) and its user service
 ```
 

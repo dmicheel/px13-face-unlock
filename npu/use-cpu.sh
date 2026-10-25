@@ -13,7 +13,7 @@ sed -i -e 's/^execution_provider = ".*"/execution_provider = "cpu"/' \
 
 if [ "${1:-}" = "--unregister" ]; then
     rm -rf /usr/lib/gaze/runtimes/vitis
-    rm -f /etc/systemd/system/gazed.service.d/vitis.conf
+    rm -f /etc/systemd/system/gazed.service.d/vitis.conf /usr/local/libexec/gaze-npu-cache-check
     systemctl daemon-reload
     echo "Removed the vitis runtime registration and gazed drop-in."
 fi

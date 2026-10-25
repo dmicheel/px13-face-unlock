@@ -17,6 +17,8 @@ DROPIN=/etc/systemd/system/gazed.service.d
 CONFIG=/etc/gaze/config.toml
 CACHE=/var/cache/gaze/inference/vitis
 PIN=$RUNTIME/osrelease
+CHECK=/usr/local/libexec/gaze-npu-cache-check
+HERE=$(cd "$(dirname "$0")" && pwd)
 
 die() { echo "error: $*" >&2; exit 1; }
 
@@ -43,19 +45,12 @@ printf '%s\n' "$ORT_LIB:$SP/flexml/flexml_extras/lib:$SP/voe/lib:$SP/lnx64.o/too
 
 # Gaze keys its compiled-model cache on sha256("<ORT path>:<ORT version>:<osrelease>"), so
 # every kernel update would recompile (~8 min). The NPU binaries don't depend on the kernel,
-# so gazed sees a pinned osrelease instead; the key then only changes with the SDK.
+# so gazed sees a pinned osrelease instead. cache-check (run before every gazed start)
+# creates the pin, recompiles when Gaze, the SDK, XRT or the NPU firmware change, and
+# removes stale caches.
+install -D -m 755 "$HERE/cache-check.sh" "$CHECK"
 if [ "${1:-}" = "--recompile" ]; then
     rm -rf "$CACHE" "$PIN"
-fi
-[ -f "$PIN" ] || cat /proc/sys/kernel/osrelease > "$PIN"
-
-# Remove caches of other kernels/SDKs, but only if the current one is where we expect it.
-ORT=$(readlink -f "$RUNTIME/libonnxruntime.so")
-NS=$(printf '%s:%s:%s\n' "$ORT" "${ORT##*.so.}" "$(cat "$PIN")" | sha256sum | cut -d' ' -f1)
-if [ -d "$CACHE/$NS" ]; then
-    for dir in "$CACHE"/*/; do
-        [ "$dir" = "$CACHE/$NS/" ] || rm -rf "$dir"
-    done
 fi
 
 # gazed environment.
@@ -64,6 +59,8 @@ fi
 #  - LD_PRELOAD: the SDK bundles libxrt_coreutil 2.19, which breaks Arch's XRT.
 #  - LimitMEMLOCK: the NPU maps locked buffers far larger than the 8 MB default.
 #  - BindReadOnlyPaths: the pinned osrelease (see above); uname() still reports the real kernel.
+#  - ExecStartPre: cache-check; "+" runs it outside the sandbox (it writes the pin), "-" keeps
+#    a failure from blocking gazed.
 install -d -m 755 "$DROPIN"
 cat > "$DROPIN/vitis.conf" <<EOF
 [Service]
@@ -75,6 +72,7 @@ Environment=XILINX_VITIS_AIETOOLS=$SP
 Environment=LD_PRELOAD=/usr/lib/libxrt_coreutil.so.2
 LimitMEMLOCK=infinity
 BindReadOnlyPaths=$PIN:/proc/sys/kernel/osrelease
+ExecStartPre=-+$CHECK
 EOF
 
 sed -i -e 's/^execution_provider = ".*"/execution_provider = "vitis"/' \
@@ -83,6 +81,6 @@ sed -i -e 's/^execution_provider = ".*"/execution_provider = "vitis"/' \
 systemctl daemon-reload
 systemctl restart gazed
 
-echo "gazed restarted on the NPU. The first start after an SDK change (or --recompile) compiles"
-echo "the models (~8 min); face auth is unavailable until this shows up:"
+echo "gazed restarted on the NPU. The first start after a Gaze, SDK, XRT or NPU firmware change"
+echo "(or --recompile) compiles the models (~8 min); face auth is unavailable until this shows up:"
 echo "  journalctl -u gazed -f | grep -m1 'Models & user DB loaded'"
