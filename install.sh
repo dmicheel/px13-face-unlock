@@ -19,6 +19,7 @@ NOCTALIA_CONFIG="$CONFIG_HOME/noctalia/config.toml"
 GREETER_CONFIG=/var/lib/noctalia-greeter/greeter.toml
 OVERLAY_BIN="$HOME/.local/bin/gaze-overlay"
 OVERLAY_UNIT="$CONFIG_HOME/systemd/user/gaze-overlay.service"
+ORC_DROPIN=/etc/systemd/system/gazed.service.d/orc.conf
 # Same lines gaze-bin puts into sudo and polkit-1, inserted after pam_nologin.
 PAM_FAILLOCK='-auth       requisite     pam_faillock.so preauth'
 PAM_GAZE='auth        sufficient    pam_gaze.so'
@@ -119,6 +120,13 @@ if [ "$ACTION" = uninstall ]; then
   rm -f "$OVERLAY_BIN" "$OVERLAY_UNIT"
   systemctl --user daemon-reload
 
+  if [ -f "$ORC_DROPIN" ]; then
+    echo "==> Removing the gazed ORC drop-in (requires sudo)"
+    sudo rm -f "$ORC_DROPIN"
+    sudo systemctl daemon-reload
+    echo "    Removed $ORC_DROPIN"
+  fi
+
   if [ -e /usr/lib/gaze/runtimes/vitis ]; then
     echo "==> Switching Gaze back to the CPU (requires sudo)"
     sh "$REPO/npu/use-cpu.sh" --unregister
@@ -142,6 +150,16 @@ if ! pacman -Q gaze-bin >/dev/null 2>&1; then
   elif command -v yay >/dev/null; then yay -S --needed gaze-bin
   else echo "Error: install gaze-bin from the AUR first (no paru/yay found)." >&2; exit 1
   fi
+fi
+# GStreamer's ORC JIT maps its code from a file it deletes right away, so
+# checkservices (cachy-update) flags gazed after every upgrade. Use ORC's C
+# fallbacks instead; the frames are small.
+ORC_CONF=$'[Service]\nEnvironment=ORC_CODE=backup'
+if [ "$(cat "$ORC_DROPIN" 2>/dev/null)" != "$ORC_CONF" ]; then
+  printf '%s\n' "$ORC_CONF" | sudo install -Dm644 /dev/stdin "$ORC_DROPIN"
+  sudo systemctl daemon-reload
+  sudo systemctl try-restart gazed
+  echo "    Wrote $ORC_DROPIN"
 fi
 sudo systemctl enable --now gazed
 echo "    $(pacman -Q gaze-bin), gazed $(systemctl is-active gazed)"

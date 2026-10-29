@@ -39,6 +39,12 @@ installing.
 - **Gaze** (`gaze-bin` from the AUR, *not* `gaze`, an unrelated file
   watcher) and the `gazed` daemon. The package itself adds `pam_gaze` to
   `sudo` and `polkit-1`.
+- **`gazed` drop-in** (`/etc/systemd/system/gazed.service.d/orc.conf`):
+  `ORC_CODE=backup`. GStreamer's ORC JIT runs its code from a temp file
+  (`/tmp/orcexec.*`) it deletes right away; `checkservices`, which
+  cachy-update runs after every upgrade, counts that as an outdated library
+  and offers to restart `gazed` every time. With this, ORC uses its C
+  fallbacks: plain C instead of JIT code, slower but fine for camera frames.
 - **Gaze config** (`/etc/gaze/config.toml`):
   - both cameras by the webcam's USB ID (`usb:3277:0059`): Gaze resolves the
     color and IR nodes (`/dev/video0`, `/dev/video2`) itself, which survives
@@ -195,6 +201,9 @@ sudo systemctl daemon-reload && sudo systemctl restart gazed
 - **No face detected on the NPU, or `Accelerator setup failed`/crash after an
   update** — stale compiled models: `sh npu/use-npu.sh --recompile`. The
   cache check logs its decisions: `journalctl -u gazed | grep 'NPU model cache'`.
+- **cachy-update lists `gazed` as needing a restart after every upgrade** —
+  the ORC drop-in is missing; re-run `bash install.sh`. Check with
+  `sudo grep -F '(deleted)' /proc/$(systemctl show -p MainPID --value gazed)/maps`.
 - **Face auth stops matching on the NPU** — check scores with debug logging;
   fall back with `sh npu/use-cpu.sh`.
 
